@@ -3,11 +3,11 @@ package com.ssu.petsapp.entity
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
-class UserTest {
+class UsersTest {
     @Test
     fun creationTest1() {
 
-        val user = User(
+        val user = Users(
             id = 12345,
             name = "Katya",
             login = "KatyaLogin",
