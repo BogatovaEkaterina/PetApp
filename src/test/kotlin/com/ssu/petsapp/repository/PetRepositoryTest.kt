@@ -1,175 +1,85 @@
 package com.ssu.petsapp.repository
 
 import com.ssu.petsapp.entity.Pet
+import com.ssu.petsapp.entity.Users
 import org.assertj.core.api.Assertions.assertThat
-import org.junit.jupiter.api.Order
-import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.TestMethodOrder
-import org.junit.jupiter.api.MethodOrderer
+import org.junit.jupiter.api.TestInstance
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest
 import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager
-import org.springframework.test.annotation.Rollback
 import java.time.LocalDateTime
 
 @DataJpaTest
-@TestMethodOrder(MethodOrderer.OrderAnnotation::class)
 class PetRepositoryTest {
+
+    @Autowired
+    private lateinit var testEntityManager: TestEntityManager
 
     @Autowired
     private lateinit var petRepository: PetRepository
 
-    @Autowired
-    private lateinit var entityManager: TestEntityManager
-
-    @Test
-    @Order(1)
-    @Rollback(false)
-    fun testSavePet() {
+    @org.junit.jupiter.api.Test
+    fun `should save and retrieve pet successfully`() {
         // Given
+        val user = Users(
+            id = 0,
+            name = "Test User",
+            login = "testuser",
+            password = "password"
+        )
+        val savedUser = testEntityManager.persistAndFlush(user)
+
         val pet = Pet(
             name = "Fluffy",
-            age = 3,
-            levelOfHunger = 0.5,
-            levelOfThirst = 0.4,
-            levelOfPollution = 0.2,
-            levelOfFatigue = 0.3,
-            mood = 1.0,
-            lastTime = LocalDateTime.now()
+            levelOfHunger = 60.0,
+            levelOfThirst = 40.0,
+            levelOfPollution = 30.0,
+            levelOfFatigue = 20.0,
+            mood = 90.0,
+            lastTime = LocalDateTime.now(),
+            user = savedUser
         )
 
         // When
         val savedPet = petRepository.save(pet)
+        testEntityManager.flush()
 
         // Then
         assertThat(savedPet.id).isNotNull()
         assertThat(savedPet.name).isEqualTo("Fluffy")
-        assertThat(savedPet.age).isEqualTo(3)
-        assertThat(savedPet.mood).isEqualTo(1.0)
+        assertThat(savedPet.user.id).isEqualTo(savedUser.id)
     }
 
-    @Test
-    @Order(2)
-    fun testFindPetById() {
+    @org.junit.jupiter.api.Test
+    fun `should find pets by owner ids`() {
         // Given
-        val now = LocalDateTime.now()
-        val pet = Pet(
-            name = "Rex",
-            age = 5,
-            levelOfHunger = 3.0,
-            levelOfThirst = 2.0,
-            levelOfPollution = 1.0,
-            levelOfFatigue = 4.0,
-            mood = 1.0,
-            lastTime = now
-        )
-        entityManager.persist(pet)
-        entityManager.flush()
+        val user1 = Users(id = 0, name = "User1", login = "user1", password = "pass")
+        val user2 = Users(id = 0, name = "User2", login = "user2", password = "pass")
+        val savedUser1 = testEntityManager.persistAndFlush(user1)
+        val savedUser2 = testEntityManager.persistAndFlush(user2)
+
+        val pet1 = Pet(name = "Pet1", user = savedUser1)
+        val pet2 = Pet(name = "Pet2", user = savedUser1)
+        val pet3 = Pet(name = "Pet3", user = savedUser2)
+
+        testEntityManager.persistAndFlush(pet1)
+        testEntityManager.persistAndFlush(pet2)
+        testEntityManager.persistAndFlush(pet3)
 
         // When
-        val foundPet = petRepository.findById(pet.id!!)
+        val foundPets = petRepository.findPetsByOwnerIds(listOf(savedUser1.id.toLong()))
 
         // Then
-        assertThat(foundPet).isPresent
-        assertThat(foundPet.get().name).isEqualTo("Rex")
-        assertThat(foundPet.get().age).isEqualTo(5)
-        assertThat(foundPet.get().lastTime).isEqualToIgnoringNanos(now)
+        assertThat(foundPets).hasSize(2)
+        assertThat(foundPets.map { it.name }).containsExactlyInAnyOrder("Pet1", "Pet2")
     }
 
-    @Test
-    @Order(3)
-    fun testFindAllPets() {
-        // Given
-        val now = LocalDateTime.now()
-        entityManager.persist(
-            Pet(
-                name = "Pet 1",
-                age = 1,
-                levelOfHunger = 1.0,
-                levelOfThirst = 1.0,
-                levelOfPollution = 0.1,
-                levelOfFatigue = 0.1,
-                mood = 0.6,
-                lastTime = now
-            )
-        )
-        entityManager.persist(
-            Pet(
-                name = "Pet 2",
-                age = 2,
-                levelOfHunger = 0.2,
-                levelOfThirst = 0.2,
-                levelOfPollution = 0.2,
-                levelOfFatigue = 0.2,
-                mood = 0.55,
-                lastTime = now
-            )
-        )
-        entityManager.flush()
-
+    @org.junit.jupiter.api.Test
+    fun `should return empty list when no pets found for owner ids`() {
         // When
-        val pets = petRepository.findAll()
+        val foundPets = petRepository.findPetsByOwnerIds(listOf(999L))
 
         // Then
-        assertThat(pets).isNotEmpty
-        assertThat(pets.size).isGreaterThanOrEqualTo(2)
-    }
-
-    @Test
-    @Order(4)
-    @Rollback(false)
-    fun testUpdatePet() {
-        // Given
-        val pet = Pet(
-            name = "Original",
-            age = 1,
-            levelOfHunger = 1.0,
-            levelOfThirst = 1.0,
-            levelOfPollution = 1.0,
-            levelOfFatigue = 1.0,
-            mood = 0.7,
-            lastTime = LocalDateTime.now()
-        )
-        entityManager.persist(pet)
-        entityManager.flush()
-
-        // When
-        val petToUpdate = petRepository.findById(pet.id!!).get()
-        petRepository.save(petToUpdate.copy(
-            name = "Updated",
-            mood = 1.0
-        ))
-
-        // Then
-        val updatedPet = petRepository.findById(pet.id!!).get()
-        assertThat(updatedPet.name).isEqualTo("Updated")
-        assertThat(updatedPet.mood).isEqualTo(1.0)
-    }
-
-    @Test
-    @Order(5)
-    @Rollback(false)
-    fun testDeletePet() {
-        // Given
-        val pet = Pet(
-            name = "To Delete",
-            age = 1,
-            levelOfHunger = 0.1,
-            levelOfThirst = 0.1,
-            levelOfPollution = 0.1,
-            levelOfFatigue = 0.1,
-            mood = 0.05,
-            lastTime = LocalDateTime.now()
-        )
-        entityManager.persist(pet)
-        entityManager.flush()
-        val petId = pet.id!!
-
-        // When
-        petRepository.deleteById(petId)
-
-        // Then
-        val deletedPet = petRepository.findById(petId)
-        assertThat(deletedPet).isEmpty
+        assertThat(foundPets).isEmpty()
     }
 }

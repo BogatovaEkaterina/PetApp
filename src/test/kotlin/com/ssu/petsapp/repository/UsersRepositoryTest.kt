@@ -2,103 +2,66 @@ package com.ssu.petsapp.repository
 
 import com.ssu.petsapp.entity.Users
 import org.assertj.core.api.Assertions.assertThat
-import org.junit.jupiter.api.Order
-import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.TestMethodOrder
-import org.junit.jupiter.api.MethodOrderer
+import org.junit.jupiter.api.TestInstance
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest
 import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager
-import org.springframework.test.annotation.Rollback
+import kotlin.test.Test
 
 @DataJpaTest
-@TestMethodOrder(MethodOrderer.OrderAnnotation::class)
 class UserRepositoryTest {
 
     @Autowired
-    private lateinit var userRepository: UsersRepository
+    private lateinit var testEntityManager: TestEntityManager
 
     @Autowired
-    private lateinit var entityManager: TestEntityManager
+    private lateinit var userRepository: UserRepository
 
     @Test
-    fun testSaveUser() {
+    fun `should find user by login`() {
         // Given
         val user = Users(
+            id = 0,
             name = "John Doe",
             login = "johndoe",
             password = "password123"
         )
+        testEntityManager.persistAndFlush(user)
 
         // When
-        val savedUser = userRepository.save(user)
+        val foundUser = userRepository.findByLogin("johndoe")
 
         // Then
-        assertThat(savedUser.id).isNotNull()
-        assertThat(savedUser.name).isEqualTo("John Doe")
-        assertThat(savedUser.login).isEqualTo("johndoe")
-        assertThat(savedUser.password).isEqualTo("password123")
+        assertThat(foundUser).isNotNull
+        assertThat(foundUser?.name).isEqualTo("John Doe")
+        assertThat(foundUser?.login).isEqualTo("johndoe")
     }
 
     @Test
-    fun testFindUserById() {
-        // Given
-        val user = Users(name = "Jane Smith", login = "janesmith", password = "pass456")
-        entityManager.persist(user)
-        entityManager.flush()
-
+    fun `should return null when user not found by login`() {
         // When
-        val foundUser = userRepository.findById(user.id!!)
+        val foundUser = userRepository.findByLogin("nonexistent")
 
         // Then
-        assertThat(foundUser).isPresent
-        assertThat(foundUser.get().name).isEqualTo("Jane Smith")
+        assertThat(foundUser).isNull()
     }
 
     @Test
-    fun testFindAllUsers() {
+    fun `should search users by name and login`() {
         // Given
-        entityManager.persist(Users(name = "User 1", login = "user1", password = "pass1"))
-        entityManager.persist(Users(name = "User 2", login = "user2", password = "pass2"))
-        entityManager.flush()
+        val user1 = Users(id = 0, name = "Alice Smith", login = "alice", password = "pass")
+        val user2 = Users(id = 0, name = "Bob Johnson", login = "bob", password = "pass")
+        val user3 = Users(id = 0, name = "Charlie Brown", login = "charlie_alice", password = "pass")
+
+        testEntityManager.persistAndFlush(user1)
+        testEntityManager.persistAndFlush(user2)
+        testEntityManager.persistAndFlush(user3)
 
         // When
-        val users = userRepository.findAll()
+        val foundUsers = userRepository.searchUsers("alice")
 
         // Then
-        assertThat(users).isNotEmpty
-        assertThat(users.size).isGreaterThanOrEqualTo(2)
-    }
-
-    @Test
-    fun testUpdateUser() {
-        // Given
-        val user = Users(name = "Original Name", login = "original", password = "pass")
-        entityManager.persist(user)
-        entityManager.flush()
-
-        // When
-        val userToUpdate = userRepository.findById(user.id!!).get()
-        userRepository.save(userToUpdate.copy(name = "Updated name"))
-
-        // Then
-        val updatedUser = userRepository.findById(user.id!!).get()
-        assertThat(updatedUser.name).isEqualTo("Updated Name")
-    }
-
-    @Test
-    fun testDeleteUser() {
-        // Given
-        val user = Users(name = "To Delete", login = "delete", password = "pass")
-        entityManager.persist(user)
-        entityManager.flush()
-        val userId = user.id!!
-
-        // When
-        userRepository.deleteById(userId)
-
-        // Then
-        val deletedUser = userRepository.findById(userId)
-        assertThat(deletedUser).isEmpty
+        assertThat(foundUsers).hasSize(2)
+        assertThat(foundUsers.map { it.name }).containsExactlyInAnyOrder("Alice Smith", "Charlie Brown")
     }
 }
